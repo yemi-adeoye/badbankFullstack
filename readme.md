@@ -53,7 +53,7 @@ For running the backend server aloneyou can use this command.
 **Yemi Adeoye**
 
 - [Profile](https://github.com/yemi-adeoye 'Yemi Adeoye')
-- [Email](mailto:a.adeoye5@gmail@gmail.com?subject=Hi 'Hi!')
+- [Email](mailto:a.adeoye5@gmail.com?subject=Hi 'Hi!')
 
 ## License
 
