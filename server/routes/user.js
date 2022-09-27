@@ -35,6 +35,14 @@ const AccountModel = require('../models/Account');
  *           type: boolean
  *           description: Tells if account is active or not
  *           example: false
+ *         user:
+ *           $ref: '#/components/schemas/User'
+ *           type: array
+ *           description: Account owners info
+ *         transaction:
+ *           $ref: '#/components/schemas/Transaction'
+ *           type: array
+ *           description: liost of users transactions ids
  *
  *     User:
  *       type: object
@@ -59,10 +67,6 @@ const AccountModel = require('../models/Account');
  *           type: date
  *           description: A user's date of birth
  *           example: 04-06-1986
- *         image:
- *           type: string
- *           description: url to users image
- *           example:  '/user/id/image/12345.jpg'
  *         role:
  *           type: string
  *           description: Admin user or customer
@@ -75,13 +79,17 @@ const AccountModel = require('../models/Account');
  *           $ref: '#/components/schemas/Account'
  *           type: object
  *           description: Admin user or customer
+ *         transaction:
+ *           $ref: '#/components/schemas/Transaction'
+ *           type: array
+ *           description: liost of users transactions ids
  *
  */
 
 /**
  * @swagger
  * paths:
- *  /api/user/create/:
+ *  /api/user/:
  *   post:
  *     summary: create a new badbank user
  *     tags:
@@ -100,16 +108,21 @@ const AccountModel = require('../models/Account');
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/User'
- *       "401":
- *         description: returns an empty object, object not found
+ *       "400":
+ *         description: bad request
  *         content:
  *           application/json:
  *             schema:
  *               type: object
- *
+ *       "500":
+ *         description: returns an  object, server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
  */
 Router.post(
-  '/user/create',
+  '/user',
   [
     check('fName', 'First name is required').not().isEmpty(),
     check('lName', 'Last name is required').not().isEmpty(),
@@ -121,7 +134,7 @@ Router.post(
   ],
   async (req, res) => {
     const errors = validationResult(req);
-    console.log(req.body);
+
     if (!errors.isEmpty()) {
       res.status(400).json({ errors: errors.array() });
       return;
@@ -147,10 +160,10 @@ Router.post(
         }
 
         if (user) {
+          console.log('told ya');
           res.status(400).json({ msg: 'User Exists' });
           return;
         }
-
         // user does not exist, check if accounts exist
         AccountModel.findOne({ accountNumber }, (err, account) => {
           if (err) {
@@ -191,6 +204,7 @@ Router.post(
                 dob,
                 role,
                 password,
+                disabled,
               });
               user.account = [account._id]; // link to created account
 
@@ -202,22 +216,33 @@ Router.post(
               user.save((err, user) => {
                 if (err) {
                   console.log(err);
+
                   res.status(500).json({ msg: 'Server Error' });
+
                   return;
                 }
                 if (user) {
                   // add reference of user to account
                   account.user = user._id;
+
                   account.save((err, account) => {
                     if (err) {
                       console.log(err);
+
                       res.status(500).json({ msg: 'Server Error' });
+
                       return;
                     }
                   });
 
                   // user has been created, create a jwt token and send
-                  const payload = { user };
+                  const payload = {
+                    user: {
+                      _id: user.id,
+                      email: user.email,
+                      password: user.password,
+                    },
+                  };
 
                   jwt.sign(
                     payload,
@@ -248,18 +273,23 @@ Router.post(
 /**
  * @swagger
  * paths:
- *  /api/user/delete/{id}/:
+ *  /api/user/:
  *   delete:
- *     summary: deletes a user by supplied id
+ *     summary: disables a user
  *     tags:
  *       - Users
  *     description: Serches for user with given id if available, deletes the user else returns an error message
  *     parameters:
- *       -  in: path
- *          name: id
- *          required: true
+ *       -  in: body
+ *          name: userDetails
+ *          description: The userId of user to be deactivated
  *          schema:
- *            type: string
+ *            type: object
+ *            required: object
+ *              - userId
+ *            properties:
+ *              userId:
+ *                type: string
  *     responses:
  *       "200":
  *         description: returns a json object with true or false depending on the operation's result
@@ -273,45 +303,56 @@ Router.post(
  *           application/json:
  *             schema:
  *               type: object
- *
+ *       "500":
+ *         description: returns an  object, server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
  */
-Router.delete('/user/:id', auth, (req, res) => {
-  // check to see that the authorized user is the owner of account to be modified or is admin
-  if (req.user.role === 'Admin') {
-    // is admin, can disable user
+Router.delete(
+  '/user/',
+  [auth, check('userId', 'User Id is required').not().isEmpty()],
+  (req, res) => {
+    const errors = validationResult(req);
 
-    const id = req.params.id;
-    UserModel.findByIdAndUpdate(id, { disabled: true }, (err, user) => {
-      if (err) {
-        console.log(err);
-        res.status(500).json({ msg: 'Server Error' });
-        return;
-      }
-      res.json({ msg: 'User successfully disabled' });
+    if (!errors.isEmpty()) {
+      res.status(400).json({ errors: errors.array() });
       return;
-    });
-  } else {
-    // is not admin
-    res.status(401).json({ msg: "You're not authorized to edit this user" });
-    return;
+    }
+    // check to see that the authorized user is the owner of account to be modified or is admin
+    if (req.user.role === 'Admin') {
+      // is admin, can disable user
+
+      const { userId } = req.body;
+      UserModel.findByIdAndUpdate(userId, { disabled: true }, (err, user) => {
+        if (err) {
+          console.log(err);
+          res.status(500).json({ msg: 'Server Error' });
+          return;
+        }
+        if (user) {
+          res.json({ msg: 'User successfully disabled' });
+          return;
+        }
+      });
+    } else {
+      // is not admin
+      res.status(401).json({ msg: "You're not authorized to edit this user" });
+      return;
+    }
   }
-});
+);
 
 /**
  * @swagger
  * paths:
- *  /api/user/{id}/:
+ *  /api/user/:
  *   put:
  *     summary: updates a given user
  *     tags:
  *       - Users
  *     description: Updates a badbank user's detail
- *     parameters:
- *       -  in: id
- *          name: value
- *          required: true
- *          schema:
- *            type: string
  *     requestBody:
  *       required: true
  *       content:
@@ -331,29 +372,47 @@ Router.delete('/user/:id', auth, (req, res) => {
  *           application/json:
  *             schema:
  *               type: object
- *
+ *       "500":
+ *         description: returns an  object, server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
  */
-Router.put('/user/:id', auth, (req, res) => {
-  // check to see that the authorized user is the owner of account to be modified or is admin
-  if (req.user._id === req.params.id || req.user.role === 'Admin') {
-    // is owner
-    const newUser = req.body;
-    const id = req.params.id;
-    UserModel.findByIdAndUpdate(id, newUser, (err, user) => {
-      if (err) {
-        console.log(err);
-        res.status(500).json({ msg: 'Server Error' });
-        return;
-      }
-      res.json({ user });
+Router.put(
+  '/user/',
+  [auth, check('userId', 'User Id is required').not().isEmpty()],
+  (req, res) => {
+    const errors = validationResult(req);
+
+    if (!errors.isEmpty()) {
+      res.status(400).json({ errors: errors.array() });
       return;
-    });
-  } else {
-    // is not owner
-    res.status(401).json({ msg: "You're not authorized to edit this user" });
-    return;
+    }
+
+    const { newUser } = req.body;
+    const id = req.body.userId;
+
+    // check to see that the authorized user is the owner of account to be modified or is admin
+    if (req.user._id === id || req.user.role === 'Admin') {
+      // is owner
+
+      UserModel.findByIdAndUpdate(id, newUser, (err, user) => {
+        if (err) {
+          console.log(err);
+          res.status(500).json({ msg: 'Server Error' });
+          return;
+        }
+        res.json({ user });
+        return;
+      });
+    } else {
+      // is not owner
+      res.status(401).json({ msg: "You're not authorized to edit this user" });
+      return;
+    }
   }
-});
+);
 
 /**
  * @swagger
@@ -385,16 +444,21 @@ Router.put('/user/:id', auth, (req, res) => {
  *               type: object
  *
  */
-Router.get('/user/:param', (req, res) => {
+Router.get('/user/:param', auth, (req, res) => {
   const emailIdAccount = req.params.param;
   console.log(emailIdAccount);
   let dbObject = {};
 
   if (validate.isEmail(emailIdAccount)) {
     dbObject.email = emailIdAccount;
+
     console.log('by email');
-    UserModel.findOne(dbObject)
-      .populate('account')
+    UserModel.findOne(dbObject, { disabled: false })
+      .populate({
+        path: 'account',
+        select: ['accountType', 'accountNumber', 'balance'],
+        match: { disabled: false },
+      })
       .exec((err, user) => {
         if (err) {
           res.status(500).json({ msg: 'Server Error' });
@@ -410,7 +474,9 @@ Router.get('/user/:param', (req, res) => {
   } else if (validate.isAccountNumber(emailIdAccount)) {
     console.log('by accouint number');
     dbObject.accountNumber = emailIdAccount;
-    AccountModel.findOne(dbObject)
+    AccountModel.findOne(dbObject, 'accountType accountNumber balance', {
+      disabled: false,
+    })
       .populate('user')
       .exec((err, account) => {
         if (err) {
@@ -450,7 +516,11 @@ Router.get('/user/:param', (req, res) => {
 
     console.log(dbObject);
     UserModel.findById(dbObject)
-      .populate('account')
+      .populate({
+        path: 'account',
+        select: ['accountType', 'accountNumber', 'balance'],
+        match: { disabled: false },
+      })
       .exec((err, user) => {
         if (err) {
           console.log(err);
@@ -471,7 +541,7 @@ Router.get('/user/:param', (req, res) => {
 /**
  * @swagger
  * paths:
- *  /api/user/:
+ *  /api/users/:
  *   get:
  *     summary: gets all users
  *     tags:
@@ -504,7 +574,11 @@ Router.get('/users', auth, (req, res) => {
     return;
   }
   UserModel.find({ disabled: false })
-    .populate('account')
+    .populate({
+      path: 'account',
+      select: ['accountType', 'accountNumber', 'balance'],
+      match: { disabled: false },
+    })
     .exec((err, users) => {
       if (err) {
         console.log(err);
@@ -512,10 +586,8 @@ Router.get('/users', auth, (req, res) => {
         return;
       }
 
-      if (users) {
-        res.json({ users });
-        return;
-      }
+      res.json({ users });
+      return;
     });
 });
 

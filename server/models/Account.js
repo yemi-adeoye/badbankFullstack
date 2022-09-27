@@ -14,6 +14,10 @@ const AccountSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+  disabled: {
+    type: Boolean,
+    default: false,
+  },
   created: {
     type: Date,
     default: Date.now,
@@ -22,6 +26,12 @@ const AccountSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'user',
   },
+  transaction: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'transaction',
+    },
+  ],
 });
 
 module.exports = mongoose.model('account', AccountSchema);

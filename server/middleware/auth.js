@@ -9,6 +9,7 @@ module.exports = (req, res, next) => {
   const token = req.header('x-auth-token');
 
   if (!token) {
+    console.log('no no no no');
     res.status(401).json({ msg: 'Not Authorized' });
     return;
   }
@@ -16,7 +17,7 @@ module.exports = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, config.get('jwtSecret'));
     req.user = decoded.user;
-    console.log(decoded.user._id);
+    //console.log(decoded.user._id);
     next();
   } catch (err) {
     res.status(401).json({ msg: 'Not Authorized' });

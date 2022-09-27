@@ -6,7 +6,11 @@
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "start": "node server.js",
-        "server": "nodemon server.js"
+        "server": "nodemon server.js",
+        "client": "npm start --prefix badbank",
+        "clientinstall": "npm install --prefix badbank",
+        "dev": "concurrently \"npm run server\" \"npm run client\"",
+        "heroku-postbuild": "NPM_CONFIG_PRODUCTION=false npm install --prefix badbank && npm run build --prefix badbank"
     },
     "keywords": [
         "badbank",
@@ -21,7 +25,9 @@
         "config": "^3.3.6",
         "express": "^4.17.1",
         "express-authenticator": "^1.0.26",
+        "express-validator": "^6.13.0",
         "faker": "^5.5.3",
+        "google-auth-library": "^7.10.2",
         "jsonwebtoken": "^8.5.1",
         "mongoose": "^6.0.12",
         "request": "^2.88.2",

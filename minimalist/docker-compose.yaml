@@ -1,0 +1,14 @@
+version: "3"
+
+services:
+  client: 
+    build: .
+
+  sample:
+    build: .
+    image: hello2:tag
+
+    links:
+      - client
+    command: npm run start
+
