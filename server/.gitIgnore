@@ -1,0 +1,4 @@
+node_modules
+ProcFile
+Dockerfile
+.dockerIgnore
